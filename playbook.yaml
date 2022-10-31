@@ -1,0 +1,79 @@
+---
+- name: LAMP stack with simple php web page
+  hosts: testserver2
+  become: true
+  gather_facts: true
+
+  vars_files:
+    vars.yaml
+
+  handlers:
+    - name: restart services
+      ansible.builtin.import_tasks: handlers.yaml
+
+  tasks:
+    - name: enable amazon extra repo
+      ansible.builtin.command: sudo amazon-linux-extras enable php7.4
+      when: ansible_facts['distribution'] == "Amazon"
+
+    - name: install LAMP
+      ansible.builtin.yum:
+        name:
+         - httpd
+         - mariadb-server
+         - MySQL-python
+         - php
+        state: latest
+        update_cache: true
+      when: ansible_facts['distribution'] == "Amazon"
+      changed_when: true
+
+    - name: create document root
+      ansible.builtin.file:
+        path: "{{ document_root }}"
+        state: directory
+        mode: 0755
+        owner: "{{ http_user }}"
+        group: "{{ http_user }}"
+
+    - name: copy virtual host
+      ansible.builtin.template:
+        src: apache.conf.j2
+        dest: "{{ http_conf }}"
+      changed_when: true
+      notify:
+        - restart apache
+        - restart mariadb
+
+    - name: Executing meta
+      ansible.builtin.meta: flush_handlers
+
+    - name: copy php web page
+      ansible.builtin.template:
+        src: index.php.j2
+        dest: "{{ document_root }}/index.php"
+        mode: 0644
+        owner: "{{ http_user }}"
+        group: "{{ http_user }}"
+
+    - name: copy .my.cnf file with root and user  password credentials for passwordless mysql access
+      ansible.builtin.template:
+        src: my.cnf.j2
+        dest: /root/.my.cnf
+        mode: 0600
+
+
+    - name: Create mysql user
+      ansible.builtin.mysql_user:
+        name: "{{ mysql_user }}"
+        password: "{{ mysql_password }}"
+        login_user: root
+        login_password: "{{ root_mysql_password }}"
+
+
+
+
+
+
+
+
